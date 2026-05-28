@@ -4,11 +4,21 @@ namespace BikeShop.Common
 {
     public class ElectricBike : Bicycle
     {
-        public int MotorPower { get; set; } = 250;
-        public override void DisplayInfo()
+        public int BatteryPower { get; set; }
+
+        public override void DisplayInfo() =>
+            Console.WriteLine($"Електробайк: {Brand} {Model}, Батарея: {BatteryPower}Wh, Ціна: {Price:C}");
+
+        public static ElectricBike CreateNew()
         {
-            base.DisplayInfo();
-            Console.WriteLine($"Тип: Електро, Потужність: {MotorPower}W");
+            var rnd = new Random();
+            return new ElectricBike
+            {
+                Brand = "Cube",
+                Model = "E-" + rnd.Next(100, 999),
+                Price = (decimal)(rnd.NextDouble() * (6000 - 2000) + 2000),
+                BatteryPower = rnd.Next(300, 1000)
+            };
         }
     }
 }

@@ -4,11 +4,18 @@ namespace BikeShop.Common
 {
     public class RoadBike : Bicycle
     {
-        public int WheelSize { get; set; } = 28;
-        public override void DisplayInfo()
+        public override void DisplayInfo() =>
+            Console.WriteLine($"Шосейник: {Brand} {Model}, Ціна: {Price:C}");
+
+        public static RoadBike CreateNew()
         {
-            base.DisplayInfo();
-            Console.WriteLine($"Тип: Шосейний, Колеса: {WheelSize} дюймів");
+            var rnd = new Random();
+            return new RoadBike
+            {
+                Brand = "Specialized",
+                Model = "R-" + rnd.Next(100, 999),
+                Price = (decimal)(rnd.NextDouble() * (8000 - 1500) + 1500)
+            };
         }
     }
 }
