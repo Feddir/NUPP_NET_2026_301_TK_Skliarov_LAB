@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="BikeShop.Common/BikeShop.Common.csproj" Id="7d508a16-4521-410e-88fc-ed3c904b4a5b" />
+  <Project Path="BikeShop.Console/BikeShop.Console.csproj" Id="3fc3adad-4a4b-40f0-91e6-0ef2ccd954ee" />
+</Solution>
