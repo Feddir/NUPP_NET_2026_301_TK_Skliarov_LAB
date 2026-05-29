@@ -2,136 +2,135 @@
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;
 
-Console.WriteLine("Демонстрація роботи CRUD сервісу для веломагазину\n");
+Console.WriteLine("Асинхронний thread-safe CRUD сервіс для веломагазину\n");
 
-// створення CRUD сервісів
-CrudService<Bike> bikeService = new CrudService<Bike>();
-CrudService<Accessory> accessoryService = new CrudService<Accessory>();
-CrudService<Customer> customerService = new CrudService<Customer>();
-CrudService<Order> orderService = new CrudService<Order>();
+string bikesFilePath = "async_bikes.json";
 
-// створення об'єктів
-Bike bike1 = new Bike("Mountain Pro", 25000, "Trek", "M", 29);
-Bike bike2 = new Bike("City Comfort", 15000, "Giant", "L", 28);
+// використовується той самий CrudService<T>, але вже асинхронний
+CrudService<Bike> bikeService = new CrudService<Bike>(bikesFilePath);
 
-Accessory helmet = new Accessory("Шолом захисний", 1200, "Безпека", "Пластик", true);
+int count = 1000;
 
-Customer customer = new Customer(
-    "Іван Петренко",
-    "+380501112233",
-    "ivan@gmail.com",
-    10,
-    2
-);
+// приклад AutoResetEvent
+AutoResetEvent autoResetEvent = new AutoResetEvent(false);
 
-// підписка на подію
-bike1.PriceChanged += message => Console.WriteLine($"Подія: {message}");
+// приклад SemaphoreSlim
+SemaphoreSlim semaphore = new SemaphoreSlim(5);
 
-// CREATE
-bikeService.Create(bike1);
-bikeService.Create(bike2);
-accessoryService.Create(helmet);
-customerService.Create(customer);
+// приклад lock
+object consoleLock = new object();
 
-Console.WriteLine("Додані велосипеди:");
-foreach (var bike in bikeService.ReadAll())
+Console.WriteLine("Початок паралельного створення велосипедів...");
+
+// паралельне створення 1000 об'єктів
+Parallel.For(0, count, i =>
+{
+    Bike bike = Bike.CreateNew();
+
+    bikeService.CreateAsync(bike).Wait();
+
+    if (i == 500)
+    {
+        autoResetEvent.Set();
+    }
+});
+
+Console.WriteLine("Очікування сигналу від AutoResetEvent...");
+autoResetEvent.WaitOne();
+
+Console.WriteLine("Сигнал отримано. Частина об'єктів уже створена.");
+
+Console.WriteLine("\nДемонстрація SemaphoreSlim:");
+
+List<Task> tasks = new List<Task>();
+
+for (int i = 0; i < 10; i++)
+{
+    int taskNumber = i;
+
+    tasks.Add(Task.Run(async () =>
+    {
+        await semaphore.WaitAsync();
+
+        try
+        {
+            lock (consoleLock)
+            {
+                Console.WriteLine($"Потік {taskNumber} отримав доступ до обмеженого ресурсу");
+            }
+
+            await Task.Delay(200);
+        }
+        finally
+        {
+            semaphore.Release();
+        }
+    }));
+}
+
+await Task.WhenAll(tasks);
+
+Console.WriteLine("\nУсі додаткові потоки завершили роботу.");
+
+IEnumerable<Bike> bikes = await bikeService.ReadAllAsync();
+
+Console.WriteLine($"\nКількість створених велосипедів: {bikes.Count()}");
+
+// мінімальне, максимальне та середнє значення ціни
+decimal minPrice = bikes.Min(b => b.Price);
+decimal maxPrice = bikes.Max(b => b.Price);
+decimal averagePrice = bikes.Average(b => b.Price);
+
+// мінімальне, максимальне та середнє значення розміру коліс
+int minWheelSize = bikes.Min(b => b.WheelSize);
+int maxWheelSize = bikes.Max(b => b.WheelSize);
+double averageWheelSize = bikes.Average(b => b.WheelSize);
+
+Console.WriteLine("\nСтатистика по цінах:");
+Console.WriteLine($"Мінімальна ціна: {minPrice} грн");
+Console.WriteLine($"Максимальна ціна: {maxPrice} грн");
+Console.WriteLine($"Середня ціна: {averagePrice:F2} грн");
+
+Console.WriteLine("\nСтатистика по розміру коліс:");
+Console.WriteLine($"Мінімальний розмір коліс: {minWheelSize}");
+Console.WriteLine($"Максимальний розмір коліс: {maxWheelSize}");
+Console.WriteLine($"Середній розмір коліс: {averageWheelSize:F2}");
+
+// демонстрація пагінації
+Console.WriteLine("\nПерша сторінка, 10 велосипедів:");
+
+IEnumerable<Bike> firstPage = await bikeService.ReadAllAsync(1, 10);
+
+foreach (var bike in firstPage)
 {
     Console.WriteLine(bike.GetInfo());
 }
 
-Console.WriteLine("\nДодані аксесуари:");
-foreach (var accessory in accessoryService.ReadAll())
-{
-    Console.WriteLine(accessory.GetInfo());
-}
+// демонстрація IEnumerable
+Console.WriteLine("\nПеревірка роботи IEnumerable, перші 5 елементів:");
 
-Console.WriteLine("\nДодані клієнти:");
-foreach (var item in customerService.ReadAll())
-{
-    Console.WriteLine(item.GetContactInfo());
-}
+int printed = 0;
 
-// READ
-Console.WriteLine("\nПошук велосипеда за Id:");
-Bike foundBike = bikeService.Read(bike1.Id);
-Console.WriteLine(foundBike.GetInfo());
-
-// UPDATE
-Console.WriteLine("\nОновлення ціни велосипеда:");
-bike1.ChangePrice(23000);
-bikeService.Update(bike1);
-
-Console.WriteLine("Після оновлення:");
-Console.WriteLine(bikeService.Read(bike1.Id).GetInfo());
-
-// метод розширення
-Console.WriteLine("\nПеревірка методу розширення:");
-Console.WriteLine($"{bike1.Name} дорогий товар: {bike1.IsExpensive()}");
-
-// створення замовлення
-Order order = new Order(customer, bike1, 1);
-orderService.Create(order);
-
-Console.WriteLine("\nСтворене замовлення:");
-foreach (var item in orderService.ReadAll())
-{
-    Console.WriteLine(item);
-}
-
-// REMOVE
-Console.WriteLine("\nВидалення велосипеда City Comfort");
-bikeService.Remove(bike2);
-
-Console.WriteLine("Список велосипедів після видалення:");
-foreach (var bike in bikeService.ReadAll())
+foreach (var bike in bikeService)
 {
     Console.WriteLine(bike.GetInfo());
+
+    printed++;
+
+    if (printed == 5)
+    {
+        break;
+    }
 }
 
-// SAVE
-Console.WriteLine("\nЗбереження даних у файли:");
+// збереження у файл
+bool saved = await bikeService.SaveAsync();
 
-string bikesFilePath = "bikes.json";
-string accessoriesFilePath = "accessories.json";
-string customersFilePath = "customers.json";
-
-bikeService.Save(bikesFilePath);
-accessoryService.Save(accessoriesFilePath);
-customerService.Save(customersFilePath);
-
-Console.WriteLine($"Велосипеди збережено у файл: {bikesFilePath}");
-Console.WriteLine($"Аксесуари збережено у файл: {accessoriesFilePath}");
-Console.WriteLine($"Клієнти збережено у файл: {customersFilePath}");
-
-// LOAD
-Console.WriteLine("\nЗавантаження даних із файлів:");
-
-CrudService<Bike> loadedBikeService = new CrudService<Bike>();
-CrudService<Accessory> loadedAccessoryService = new CrudService<Accessory>();
-CrudService<Customer> loadedCustomerService = new CrudService<Customer>();
-
-loadedBikeService.Load(bikesFilePath);
-loadedAccessoryService.Load(accessoriesFilePath);
-loadedCustomerService.Load(customersFilePath);
-
-Console.WriteLine("\nВелосипеди, завантажені з файлу:");
-foreach (var bike in loadedBikeService.ReadAll())
+if (saved)
 {
-    Console.WriteLine(bike.GetInfo());
+    Console.WriteLine($"\nКолекцію збережено у файл: {bikesFilePath}");
 }
-
-Console.WriteLine("\nАксесуари, завантажені з файлу:");
-foreach (var accessory in loadedAccessoryService.ReadAll())
+else
 {
-    Console.WriteLine(accessory.GetInfo());
+    Console.WriteLine("\nПомилка під час збереження файлу");
 }
-
-Console.WriteLine("\nКлієнти, завантажені з файлу:");
-foreach (var item in loadedCustomerService.ReadAll())
-{
-    Console.WriteLine(item.GetContactInfo());
-}
-
-// статичні методи
-Console.WriteLine($"\nЗагальна кількість створених товарів: {Product.GetTotalProducts()}");
-Console.WriteLine($"Загальна кількість створених людей: {Person.GetTotalPersons()}");
