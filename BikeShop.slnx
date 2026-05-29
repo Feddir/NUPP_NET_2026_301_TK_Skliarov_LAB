@@ -2,4 +2,5 @@
   <Project Path="BikeShop.Common/BikeShop.Common.csproj" Id="7d508a16-4521-410e-88fc-ed3c904b4a5b" />
   <Project Path="BikeShop.Console/BikeShop.Console.csproj" Id="3fc3adad-4a4b-40f0-91e6-0ef2ccd954ee" />
   <Project Path="BikeShop.Infrastructure/BikeShop.Infrastructure.csproj" Id="be929f86-39c2-4232-9295-815077bb0d8a" />
+  <Project Path="BikeShop.REST/BikeShop.REST.csproj" Id="3b26294e-7a1a-4a21-b889-407ac2bc47d6" />
 </Solution>
