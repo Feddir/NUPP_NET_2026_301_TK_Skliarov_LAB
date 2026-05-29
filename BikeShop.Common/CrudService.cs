@@ -1,89 +1,132 @@
+using System.Collections;
+using System.Collections.Concurrent;
 using System.Text.Json;
 
 namespace BikeShop.Common;
 
-public class CrudService<T> : ICrudService<T> where T : IEntity
+public class CrudService<T> : ICrudServiceAsync<T> where T : IEntity
 {
-    // вбудована колекція .NET для зберігання даних
-    private readonly Dictionary<Guid, T> _storage = new();
+    // thread-safe колекція .NET
+    private readonly ConcurrentDictionary<Guid, T> _storage = new();
 
-    // метод створення
-    public void Create(T element)
+    private readonly string _filePath;
+
+    // приклад використання lock
+    private readonly object _lockObject = new();
+
+    // приклад використання SemaphoreSlim
+    private readonly SemaphoreSlim _semaphore = new(1, 1);
+
+    // конструктор
+    public CrudService(string filePath)
     {
-        _storage[element.Id] = element;
+        _filePath = filePath;
     }
 
-    // метод читання одного елемента
-    public T Read(Guid id)
+    // асинхронний метод створення
+    public Task<bool> CreateAsync(T element)
     {
-        if (_storage.ContainsKey(id))
+        bool result = _storage.TryAdd(element.Id, element);
+        return Task.FromResult(result);
+    }
+
+    // асинхронний метод читання одного елемента
+    public Task<T> ReadAsync(Guid id)
+    {
+        if (_storage.TryGetValue(id, out T? element))
         {
-            return _storage[id];
+            return Task.FromResult(element);
         }
 
         throw new Exception("Елемент не знайдено");
     }
 
-    // метод читання всіх елементів
-    public IEnumerable<T> ReadAll()
+    // асинхронний метод читання всіх елементів
+    public Task<IEnumerable<T>> ReadAllAsync()
     {
-        return _storage.Values;
+        IEnumerable<T> result = _storage.Values.ToList();
+        return Task.FromResult(result);
     }
 
-    // метод оновлення
-    public void Update(T element)
+    // асинхронний метод читання з пагінацією
+    public Task<IEnumerable<T>> ReadAllAsync(int page, int amount)
     {
-        if (_storage.ContainsKey(element.Id))
+        if (page <= 0)
         {
-            _storage[element.Id] = element;
+            page = 1;
         }
-        else
+
+        if (amount <= 0)
         {
-            throw new Exception("Елемент для оновлення не знайдено");
+            amount = 10;
+        }
+
+        IEnumerable<T> result = _storage.Values
+            .Skip((page - 1) * amount)
+            .Take(amount)
+            .ToList();
+
+        return Task.FromResult(result);
+    }
+
+    // асинхронний метод оновлення
+    public Task<bool> UpdateAsync(T element)
+    {
+        if (!_storage.ContainsKey(element.Id))
+        {
+            return Task.FromResult(false);
+        }
+
+        _storage[element.Id] = element;
+        return Task.FromResult(true);
+    }
+
+    // асинхронний метод видалення
+    public Task<bool> RemoveAsync(T element)
+    {
+        bool result = _storage.TryRemove(element.Id, out _);
+        return Task.FromResult(result);
+    }
+
+    // асинхронне збереження у файл
+    public async Task<bool> SaveAsync()
+    {
+        await _semaphore.WaitAsync();
+
+        try
+        {
+            List<T> elements;
+
+            lock (_lockObject)
+            {
+                elements = _storage.Values.ToList();
+            }
+
+            var options = new JsonSerializerOptions
+            {
+                WriteIndented = true
+            };
+
+            string json = JsonSerializer.Serialize(elements, options);
+
+            await File.WriteAllTextAsync(_filePath, json);
+
+            return true;
+        }
+        finally
+        {
+            _semaphore.Release();
         }
     }
 
-    // метод видалення
-    public void Remove(T element)
+    // реалізація IEnumerable<T>
+    public IEnumerator<T> GetEnumerator()
     {
-        _storage.Remove(element.Id);
+        return _storage.Values.GetEnumerator();
     }
 
-    // метод збереження даних у файл
-    public void Save(string filePath)
+    IEnumerator IEnumerable.GetEnumerator()
     {
-        var options = new JsonSerializerOptions
-        {
-            WriteIndented = true
-        };
-
-        string json = JsonSerializer.Serialize(_storage.Values, options);
-
-        File.WriteAllText(filePath, json);
-    }
-
-    // метод завантаження даних із файлу
-    public void Load(string filePath)
-    {
-        if (!File.Exists(filePath))
-        {
-            throw new FileNotFoundException("Файл не знайдено", filePath);
-        }
-
-        string json = File.ReadAllText(filePath);
-
-        List<T>? elements = JsonSerializer.Deserialize<List<T>>(json);
-
-        if (elements == null)
-        {
-            return;
-        }
-
-        _storage.Clear();
-
-        foreach (var element in elements)
-        {
-            _storage[element.Id] = element;
-        }
+        return GetEnumerator();
     }
 }
