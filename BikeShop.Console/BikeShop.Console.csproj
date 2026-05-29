@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\BikeShop.Common\BikeShop.Common.csproj" />
+    <ProjectReference Include="..\BikeShop.Infrastructure\BikeShop.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>
