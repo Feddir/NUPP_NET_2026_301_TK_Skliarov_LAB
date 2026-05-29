@@ -1,5 +1,6 @@
 using BikeShop.Common;
 using BikeShop.Infrastructure.Models;
+using BikeShop.REST.Models;
 using Microsoft.AspNetCore.Mvc;
 
 namespace BikeShop.REST.Controllers;
@@ -23,15 +24,26 @@ public class OrdersController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<OrderModel>>> GetAll()
+    public async Task<ActionResult<IEnumerable<OrderResponseModel>>> GetAll()
     {
         var orders = await _orderService.ReadAllAsync();
 
-        return Ok(orders);
+        var response = orders.Select(order => new OrderResponseModel
+        {
+            Id = order.Id,
+            OrderDate = order.OrderDate,
+            CustomerId = order.CustomerId,
+            BikeId = order.BikeId,
+            Quantity = order.Quantity,
+            UnitPrice = order.UnitPrice,
+            TotalPrice = order.UnitPrice * order.Quantity
+        });
+
+        return Ok(response);
     }
 
     [HttpGet("{id:guid}")]
-    public async Task<ActionResult<OrderModel>> GetById(Guid id)
+    public async Task<ActionResult<OrderResponseModel>> GetById(Guid id)
     {
         var order = await _orderService.ReadAsync(id);
 
@@ -40,65 +52,93 @@ public class OrdersController : ControllerBase
             return NotFound();
         }
 
-        return Ok(order);
+        var response = new OrderResponseModel
+        {
+            Id = order.Id,
+            OrderDate = order.OrderDate,
+            CustomerId = order.CustomerId,
+            BikeId = order.BikeId,
+            Quantity = order.Quantity,
+            UnitPrice = order.UnitPrice,
+            TotalPrice = order.UnitPrice * order.Quantity
+        };
+
+        return Ok(response);
     }
 
     [HttpPost]
-    public async Task<ActionResult<OrderModel>> Create(OrderModel order)
+    public async Task<ActionResult<OrderResponseModel>> Create(OrderCreateModel model)
     {
-        var bike = await _bikeService.ReadAsync(order.BikeId);
+        var bike = await _bikeService.ReadAsync(model.BikeId);
 
         if (bike == null)
         {
             return BadRequest("Bike with this Id does not exist.");
         }
 
-        var customer = await _customerService.ReadAsync(order.CustomerId);
+        var customer = await _customerService.ReadAsync(model.CustomerId);
 
         if (customer == null)
         {
             return BadRequest("Customer with this Id does not exist.");
         }
 
-        order.Id = Guid.NewGuid();
-        order.OrderDate = DateTime.UtcNow;
-        order.UnitPrice = bike.Price;
+        var order = new OrderModel
+        {
+            Id = Guid.NewGuid(),
+            OrderDate = DateTime.UtcNow,
+            CustomerId = model.CustomerId,
+            BikeId = model.BikeId,
+            Quantity = model.Quantity,
+            UnitPrice = bike.Price
+        };
 
         await _orderService.CreateAsync(order);
 
-        return CreatedAtAction(nameof(GetById), new { id = order.Id }, order);
+        var response = new OrderResponseModel
+        {
+            Id = order.Id,
+            OrderDate = order.OrderDate,
+            CustomerId = order.CustomerId,
+            BikeId = order.BikeId,
+            Quantity = order.Quantity,
+            UnitPrice = order.UnitPrice,
+            TotalPrice = order.UnitPrice * order.Quantity
+        };
+
+        return CreatedAtAction(nameof(GetById), new { id = order.Id }, response);
     }
 
     [HttpPut("{id:guid}")]
-    public async Task<IActionResult> Update(Guid id, OrderModel order)
+    public async Task<IActionResult> Update(Guid id, OrderCreateModel model)
     {
-        var existingOrder = await _orderService.ReadAsync(id);
+        var order = await _orderService.ReadAsync(id);
 
-        if (existingOrder == null)
+        if (order == null)
         {
             return NotFound();
         }
 
-        var bike = await _bikeService.ReadAsync(order.BikeId);
+        var bike = await _bikeService.ReadAsync(model.BikeId);
 
         if (bike == null)
         {
             return BadRequest("Bike with this Id does not exist.");
         }
 
-        var customer = await _customerService.ReadAsync(order.CustomerId);
+        var customer = await _customerService.ReadAsync(model.CustomerId);
 
         if (customer == null)
         {
             return BadRequest("Customer with this Id does not exist.");
         }
 
-        existingOrder.Quantity = order.Quantity;
-        existingOrder.BikeId = order.BikeId;
-        existingOrder.CustomerId = order.CustomerId;
-        existingOrder.UnitPrice = bike.Price;
+        order.CustomerId = model.CustomerId;
+        order.BikeId = model.BikeId;
+        order.Quantity = model.Quantity;
+        order.UnitPrice = bike.Price;
 
-        await _orderService.UpdateAsync(existingOrder);
+        await _orderService.UpdateAsync(order);
 
         return NoContent();
     }

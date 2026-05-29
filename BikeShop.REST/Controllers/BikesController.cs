@@ -1,5 +1,6 @@
 using BikeShop.Common;
 using BikeShop.Infrastructure.Models;
+using BikeShop.REST.Models;
 using Microsoft.AspNetCore.Mvc;
 
 namespace BikeShop.REST.Controllers;
@@ -16,28 +17,25 @@ public class BikesController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<BikeModel>>> GetAll()
+    public async Task<ActionResult<IEnumerable<BikeResponseModel>>> GetAll()
     {
         var bikes = await _bikeService.ReadAllAsync();
 
-        return Ok(bikes);
-    }
-
-    [HttpGet("page/{page:int}/amount/{amount:int}")]
-    public async Task<ActionResult<IEnumerable<BikeModel>>> GetPage(int page, int amount)
-    {
-        if (page <= 0 || amount <= 0)
+        var response = bikes.Select(bike => new BikeResponseModel
         {
-            return BadRequest("Page and amount must be greater than zero.");
-        }
+            Id = bike.Id,
+            Name = bike.Name,
+            Brand = bike.Brand,
+            FrameSize = bike.FrameSize,
+            WheelSize = bike.WheelSize,
+            Price = bike.Price
+        });
 
-        var bikes = await _bikeService.ReadAllAsync(page, amount);
-
-        return Ok(bikes);
+        return Ok(response);
     }
 
     [HttpGet("{id:guid}")]
-    public async Task<ActionResult<BikeModel>> GetById(Guid id)
+    public async Task<ActionResult<BikeResponseModel>> GetById(Guid id)
     {
         var bike = await _bikeService.ReadAsync(id);
 
@@ -46,36 +44,87 @@ public class BikesController : ControllerBase
             return NotFound();
         }
 
-        return Ok(bike);
+        var response = new BikeResponseModel
+        {
+            Id = bike.Id,
+            Name = bike.Name,
+            Brand = bike.Brand,
+            FrameSize = bike.FrameSize,
+            WheelSize = bike.WheelSize,
+            Price = bike.Price
+        };
+
+        return Ok(response);
+    }
+
+    [HttpGet("page/{page:int}/amount/{amount:int}")]
+    public async Task<ActionResult<IEnumerable<BikeResponseModel>>> GetPage(int page, int amount)
+    {
+        if (page <= 0 || amount <= 0)
+        {
+            return BadRequest("Page and amount must be greater than zero.");
+        }
+
+        var bikes = await _bikeService.ReadAllAsync(page, amount);
+
+        var response = bikes.Select(bike => new BikeResponseModel
+        {
+            Id = bike.Id,
+            Name = bike.Name,
+            Brand = bike.Brand,
+            FrameSize = bike.FrameSize,
+            WheelSize = bike.WheelSize,
+            Price = bike.Price
+        });
+
+        return Ok(response);
     }
 
     [HttpPost]
-    public async Task<ActionResult<BikeModel>> Create(BikeModel bike)
+    public async Task<ActionResult<BikeResponseModel>> Create(BikeCreateModel model)
     {
-        bike.Id = Guid.NewGuid();
+        var bike = new BikeModel
+        {
+            Id = Guid.NewGuid(),
+            Name = model.Name,
+            Brand = model.Brand,
+            FrameSize = model.FrameSize,
+            WheelSize = model.WheelSize,
+            Price = model.Price
+        };
 
         await _bikeService.CreateAsync(bike);
 
-        return CreatedAtAction(nameof(GetById), new { id = bike.Id }, bike);
+        var response = new BikeResponseModel
+        {
+            Id = bike.Id,
+            Name = bike.Name,
+            Brand = bike.Brand,
+            FrameSize = bike.FrameSize,
+            WheelSize = bike.WheelSize,
+            Price = bike.Price
+        };
+
+        return CreatedAtAction(nameof(GetById), new { id = bike.Id }, response);
     }
 
     [HttpPut("{id:guid}")]
-    public async Task<IActionResult> Update(Guid id, BikeModel bike)
+    public async Task<IActionResult> Update(Guid id, BikeCreateModel model)
     {
-        var existingBike = await _bikeService.ReadAsync(id);
+        var bike = await _bikeService.ReadAsync(id);
 
-        if (existingBike == null)
+        if (bike == null)
         {
             return NotFound();
         }
 
-        existingBike.Name = bike.Name;
-        existingBike.Brand = bike.Brand;
-        existingBike.FrameSize = bike.FrameSize;
-        existingBike.WheelSize = bike.WheelSize;
-        existingBike.Price = bike.Price;
+        bike.Name = model.Name;
+        bike.Brand = model.Brand;
+        bike.FrameSize = model.FrameSize;
+        bike.WheelSize = model.WheelSize;
+        bike.Price = model.Price;
 
-        await _bikeService.UpdateAsync(existingBike);
+        await _bikeService.UpdateAsync(bike);
 
         return NoContent();
     }

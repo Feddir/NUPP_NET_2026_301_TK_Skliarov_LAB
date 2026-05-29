@@ -1,5 +1,6 @@
 using BikeShop.Common;
 using BikeShop.Infrastructure.Models;
+using BikeShop.REST.Models;
 using Microsoft.AspNetCore.Mvc;
 
 namespace BikeShop.REST.Controllers;
@@ -16,28 +17,26 @@ public class CustomersController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<CustomerModel>>> GetAll()
+    public async Task<ActionResult<IEnumerable<CustomerResponseModel>>> GetAll()
     {
         var customers = await _customerService.ReadAllAsync();
 
-        return Ok(customers);
-    }
-
-    [HttpGet("page/{page:int}/amount/{amount:int}")]
-    public async Task<ActionResult<IEnumerable<CustomerModel>>> GetPage(int page, int amount)
-    {
-        if (page <= 0 || amount <= 0)
+        var response = customers.Select(customer => new CustomerResponseModel
         {
-            return BadRequest("Page and amount must be greater than zero.");
-        }
+            Id = customer.Id,
+            FullName = customer.FullName,
+            PhoneNumber = customer.PhoneNumber,
+            Email = customer.Email,
+            DiscountPercent = customer.DiscountPercent,
+            Address = customer.Profile?.Address,
+            RegistrationDate = customer.Profile?.RegistrationDate
+        });
 
-        var customers = await _customerService.ReadAllAsync(page, amount);
-
-        return Ok(customers);
+        return Ok(response);
     }
 
     [HttpGet("{id:guid}")]
-    public async Task<ActionResult<CustomerModel>> GetById(Guid id)
+    public async Task<ActionResult<CustomerResponseModel>> GetById(Guid id)
     {
         var customer = await _customerService.ReadAsync(id);
 
@@ -46,41 +45,70 @@ public class CustomersController : ControllerBase
             return NotFound();
         }
 
-        return Ok(customer);
+        var response = new CustomerResponseModel
+        {
+            Id = customer.Id,
+            FullName = customer.FullName,
+            PhoneNumber = customer.PhoneNumber,
+            Email = customer.Email,
+            DiscountPercent = customer.DiscountPercent,
+            Address = customer.Profile?.Address,
+            RegistrationDate = customer.Profile?.RegistrationDate
+        };
+
+        return Ok(response);
     }
 
     [HttpPost]
-    public async Task<ActionResult<CustomerModel>> Create(CustomerModel customer)
+    public async Task<ActionResult<CustomerResponseModel>> Create(CustomerCreateModel model)
     {
-        customer.Id = Guid.NewGuid();
-
-        if (customer.Profile != null)
+        var customer = new CustomerModel
         {
-            customer.Profile.Id = Guid.NewGuid();
-            customer.Profile.CustomerId = customer.Id;
-        }
+            Id = Guid.NewGuid(),
+            FullName = model.FullName,
+            PhoneNumber = model.PhoneNumber,
+            Email = model.Email,
+            DiscountPercent = model.DiscountPercent,
+            Profile = new CustomerProfileModel
+            {
+                Id = Guid.NewGuid(),
+                Address = model.Address,
+                RegistrationDate = DateTime.UtcNow
+            }
+        };
 
         await _customerService.CreateAsync(customer);
 
-        return CreatedAtAction(nameof(GetById), new { id = customer.Id }, customer);
+        var response = new CustomerResponseModel
+        {
+            Id = customer.Id,
+            FullName = customer.FullName,
+            PhoneNumber = customer.PhoneNumber,
+            Email = customer.Email,
+            DiscountPercent = customer.DiscountPercent,
+            Address = customer.Profile.Address,
+            RegistrationDate = customer.Profile.RegistrationDate
+        };
+
+        return CreatedAtAction(nameof(GetById), new { id = customer.Id }, response);
     }
 
     [HttpPut("{id:guid}")]
-    public async Task<IActionResult> Update(Guid id, CustomerModel customer)
+    public async Task<IActionResult> Update(Guid id, CustomerCreateModel model)
     {
-        var existingCustomer = await _customerService.ReadAsync(id);
+        var customer = await _customerService.ReadAsync(id);
 
-        if (existingCustomer == null)
+        if (customer == null)
         {
             return NotFound();
         }
 
-        existingCustomer.FullName = customer.FullName;
-        existingCustomer.PhoneNumber = customer.PhoneNumber;
-        existingCustomer.Email = customer.Email;
-        existingCustomer.DiscountPercent = customer.DiscountPercent;
+        customer.FullName = model.FullName;
+        customer.PhoneNumber = model.PhoneNumber;
+        customer.Email = model.Email;
+        customer.DiscountPercent = model.DiscountPercent;
 
-        await _customerService.UpdateAsync(existingCustomer);
+        await _customerService.UpdateAsync(customer);
 
         return NoContent();
     }
